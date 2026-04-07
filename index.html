@@ -944,15 +944,27 @@
             }, 600);
         });
 
-        /* ── views — counterapi.dev (increments on every visit, unique namespace) ── */
+        /* ── views — CountAPI works from static hosts like GitHub Pages ── */
         async function initViews() {
+            const counterUrl = 'https://api.countapi.xyz/hit/sg0hann-biolink/total-visits';
+            const fallbackUrl = 'https://api.countapi.xyz/get/sg0hann-biolink/total-visits';
+
             try {
-                const res = await fetch('https://api.counterapi.dev/v1/sg0hann-biolink/total-visits/up');
+                const res = await fetch(counterUrl, { cache: 'no-store' });
+                if (!res.ok) throw new Error('counter increment failed');
                 const data = await res.json();
-                const count = data?.count ?? data?.value ?? 0;
-                document.getElementById('viewCount').textContent = Number(count).toLocaleString();
+                const count = Number(data?.value ?? 0);
+                document.getElementById('viewCount').textContent = count.toLocaleString();
             } catch (_) {
-                document.getElementById('viewCount').textContent = '—';
+                try {
+                    const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
+                    if (!fallbackRes.ok) throw new Error('counter read failed');
+                    const fallbackData = await fallbackRes.json();
+                    const fallbackCount = Number(fallbackData?.value ?? 0);
+                    document.getElementById('viewCount').textContent = fallbackCount.toLocaleString();
+                } catch (_) {
+                    document.getElementById('viewCount').textContent = '—';
+                }
             }
         }
         if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {

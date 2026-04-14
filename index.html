@@ -399,6 +399,44 @@
             gap: 5px;
         }
 
+        .visitors {
+            font-size: 0.75rem;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .badges {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .like-btn {
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.12);
+            color: #ffd7d7;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 6px 11px;
+            transition: transform 0.16s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        .like-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.35);
+        }
+
+        .like-btn:disabled {
+            opacity: 0.6;
+            box-shadow: none;
+        }
+
         .views-dot {
             width: 6px;
             height: 6px;
@@ -763,6 +801,12 @@
                 <span id="viewCount">—</span> views
             </div>
 
+            <div class="visitors"><span id="visCount">—</span> all-time visitors</div>
+            <div class="badges">
+                <span class="badge"><span id="likeCount">0</span> likes</span>
+                <button class="like-btn" id="likeBtn" type="button">Like</button>
+            </div>
+
             <div class="links">
                 <!-- YouTube -->
                 <a class="link-btn yt" href="https://www.youtube.com/@sg0hann" target="_blank" rel="noopener">
@@ -831,6 +875,9 @@
     </div>
 
     <script>
+        const NAMESPACE = 'sg0hann_everything_v5';
+        const ABACUS_BASE = 'https://abacus.jasoncameron.dev';
+
         /* ── particles + trail — single unified RAF loop ── */
         const canvas = document.getElementById('bg-canvas');
         const ctx = canvas.getContext('2d');
@@ -944,34 +991,122 @@
             }, 600);
         });
 
-        /* ── views — CountAPI works from static hosts like GitHub Pages ── */
+        /* ── visitors — real-time all-time total ── */
         async function initViews() {
-            const counterUrl = 'https://api.countapi.xyz/hit/sg0hann-biolink/total-visits';
-            const fallbackUrl = 'https://api.countapi.xyz/get/sg0hann-biolink/total-visits';
+            const totalHitUrl = `${ABACUS_BASE}/hit/${NAMESPACE}/total-visits`;
+            const totalGetUrl = `${ABACUS_BASE}/get/${NAMESPACE}/total-visits`;
+            const totalStreamUrl = `${ABACUS_BASE}/stream/${NAMESPACE}/total-visits`;
+
+            function setTotalVisitors(value) {
+                const formatted = Number(value ?? 0).toLocaleString();
+                document.getElementById('viewCount').textContent = formatted;
+                document.getElementById('visCount').textContent = formatted;
+            }
 
             try {
-                const res = await fetch(counterUrl, { cache: 'no-store' });
-                if (!res.ok) throw new Error('counter increment failed');
-                const data = await res.json();
-                const count = Number(data?.value ?? 0);
-                document.getElementById('viewCount').textContent = count.toLocaleString();
+                const totalRes = await fetch(totalHitUrl, { cache: 'no-store' });
+                if (!totalRes.ok) throw new Error('total views increment failed');
+                const totalData = await totalRes.json();
+                const totalCount = Number(totalData?.value ?? 0);
+                setTotalVisitors(totalCount);
             } catch (_) {
                 try {
-                    const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
-                    if (!fallbackRes.ok) throw new Error('counter read failed');
-                    const fallbackData = await fallbackRes.json();
-                    const fallbackCount = Number(fallbackData?.value ?? 0);
-                    document.getElementById('viewCount').textContent = fallbackCount.toLocaleString();
+                    const totalFallbackRes = await fetch(totalGetUrl, { cache: 'no-store' });
+                    if (!totalFallbackRes.ok) throw new Error('total views read failed');
+                    const totalFallbackData = await totalFallbackRes.json();
+                    const totalFallbackCount = Number(totalFallbackData?.value ?? 0);
+                    setTotalVisitors(totalFallbackCount);
                 } catch (_) {
                     document.getElementById('viewCount').textContent = '—';
+                    document.getElementById('visCount').textContent = '—';
                 }
             }
+
+            try {
+                const source = new EventSource(totalStreamUrl);
+                source.onmessage = (event) => {
+                    try {
+                        const payload = JSON.parse(event.data);
+                        const value = Number(payload?.value ?? 0);
+                        setTotalVisitors(value);
+                    } catch (_) {
+                        // ignore malformed stream payloads
+                    }
+                };
+            } catch (_) {
+                // stream is optional; initial fetched value is still shown
+            }
         }
+
+        async function initLikes() {
+            const countEl = document.getElementById('likeCount');
+            if (!countEl) return;
+
+            try {
+                const res = await fetch(`${ABACUS_BASE}/get/${NAMESPACE}/likes`, { cache: 'no-store' });
+                if (!res.ok) throw new Error('likes fetch failed');
+                const data = await res.json();
+                const value = Number(data?.value ?? 0);
+                countEl.innerText = String(value);
+                localStorage.setItem('local_likes', String(value));
+            } catch (_) {
+                countEl.innerText = localStorage.getItem('local_likes') || '0';
+            }
+        }
+
+        async function likeOnce() {
+            const likeBtn = document.getElementById('likeBtn');
+            const countEl = document.getElementById('likeCount');
+            if (!likeBtn || !countEl) return;
+
+            const dailyKey = `${NAMESPACE}_liked_date`;
+            const today = new Date().toISOString().slice(0, 10);
+            if (localStorage.getItem(dailyKey) === today) {
+                likeBtn.disabled = true;
+                likeBtn.textContent = 'Liked';
+                return;
+            }
+
+            likeBtn.disabled = true;
+            likeBtn.textContent = 'Liking...';
+
+            try {
+                const res = await fetch(`${ABACUS_BASE}/hit/${NAMESPACE}/likes`, { cache: 'no-store' });
+                if (!res.ok) throw new Error('like increment failed');
+                const data = await res.json();
+                const value = Number(data?.value ?? 0);
+                countEl.innerText = String(value);
+                localStorage.setItem('local_likes', String(value));
+                localStorage.setItem(dailyKey, today);
+                likeBtn.textContent = 'Liked';
+            } catch (_) {
+                likeBtn.disabled = false;
+                likeBtn.textContent = 'Like';
+            }
+        }
+
+        function bindLikeButton() {
+            const likeBtn = document.getElementById('likeBtn');
+            if (!likeBtn) return;
+
+            const dailyKey = `${NAMESPACE}_liked_date`;
+            const today = new Date().toISOString().slice(0, 10);
+            if (localStorage.getItem(dailyKey) === today) {
+                likeBtn.disabled = true;
+                likeBtn.textContent = 'Liked';
+            }
+
+            likeBtn.addEventListener('click', likeOnce);
+        }
+
         if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             initViews();
         } else {
             document.getElementById('viewCount').textContent = 'dev';
+            document.getElementById('visCount').textContent = 'dev';
         }
+        initLikes();
+        bindLikeButton();
 
         /* ── music player ── */
         const audio = document.getElementById('audioEl');

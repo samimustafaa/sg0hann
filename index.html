@@ -796,14 +796,13 @@
                 Skopje, Macedonia &nbsp;<span class="badge">OGFN Content Creator</span>
             </div>
 
-            <!-- <div class="views">
+            <div class="views">
                 <span class="views-dot"></span>
-                <span id="viewCount">—</span> views
-            </div> -->
+                <span id="viewCount">0</span> views
+            </div>
 
-             <div class="views">
-                <span class="views-dot"></span>
-            <span class="visitors"><span id="visCount">—</span>views</div>
+            <div class="visitors"><span id="visCount">0</span> views</div>
+
             <div class="badges">
                 <span class="badge"><span id="likeCount">0</span> likes</span>
                 <button class="like-btn" id="likeBtn" type="button">Like</button>
@@ -993,11 +992,37 @@
             }, 600);
         });
 
+        function jsonpRequest(url) {
+            return new Promise((resolve, reject) => {
+                const callbackName = `abacus_cb_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                const script = document.createElement('script');
+                const separator = url.includes('?') ? '&' : '?';
+                const timeoutId = setTimeout(() => cleanup(new Error('JSONP request timed out')), 8000);
+
+                function cleanup(error, payload) {
+                    clearTimeout(timeoutId);
+                    delete window[callbackName];
+                    script.remove();
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(payload);
+                    }
+                }
+
+                window[callbackName] = (payload) => cleanup(null, payload);
+                script.onerror = () => cleanup(new Error('JSONP request failed'));
+                script.src = `${url}${separator}callback=${callbackName}`;
+                document.head.appendChild(script);
+            });
+        }
+
         /* ── visitors — real-time all-time total ── */
         async function initViews() {
             const totalHitUrl = `${ABACUS_BASE}/hit/${NAMESPACE}/total-visits`;
             const totalGetUrl = `${ABACUS_BASE}/get/${NAMESPACE}/total-visits`;
-            const totalStreamUrl = `${ABACUS_BASE}/stream/${NAMESPACE}/total-visits`;
+            const totalPollUrl = `${ABACUS_BASE}/get/${NAMESPACE}/total-visits`;
+            let visitorPollTimer = null;
 
             function setTotalVisitors(value) {
                 const formatted = Number(value ?? 0).toLocaleString();
@@ -1006,37 +1031,39 @@
             }
 
             try {
-                const totalRes = await fetch(totalHitUrl, { cache: 'no-store' });
-                if (!totalRes.ok) throw new Error('total views increment failed');
-                const totalData = await totalRes.json();
-                const totalCount = Number(totalData?.value ?? 0);
-                setTotalVisitors(totalCount);
+                const totalData = await jsonpRequest(totalHitUrl);
+                setTotalVisitors(totalData?.value ?? 0);
             } catch (_) {
                 try {
-                    const totalFallbackRes = await fetch(totalGetUrl, { cache: 'no-store' });
-                    if (!totalFallbackRes.ok) throw new Error('total views read failed');
-                    const totalFallbackData = await totalFallbackRes.json();
-                    const totalFallbackCount = Number(totalFallbackData?.value ?? 0);
-                    setTotalVisitors(totalFallbackCount);
+                    const totalFallbackData = await jsonpRequest(totalGetUrl);
+                    setTotalVisitors(totalFallbackData?.value ?? 0);
                 } catch (_) {
-                    document.getElementById('viewCount').textContent = '—';
-                    document.getElementById('visCount').textContent = '—';
+                    const cachedTotal = localStorage.getItem(`${NAMESPACE}_total_visits`);
+                    if (cachedTotal) {
+                        setTotalVisitors(cachedTotal);
+                    } else {
+                        document.getElementById('viewCount').textContent = '0';
+                        document.getElementById('visCount').textContent = '0';
+                    }
                 }
             }
 
             try {
-                const source = new EventSource(totalStreamUrl);
-                source.onmessage = (event) => {
+                const refreshTotalVisitors = async () => {
                     try {
-                        const payload = JSON.parse(event.data);
-                        const value = Number(payload?.value ?? 0);
+                        const latest = await jsonpRequest(totalPollUrl);
+                        const value = Number(latest?.value ?? 0);
+                        localStorage.setItem(`${NAMESPACE}_total_visits`, String(value));
                         setTotalVisitors(value);
                     } catch (_) {
-                        // ignore malformed stream payloads
+                        // keep the last known value
                     }
                 };
+
+                refreshTotalVisitors();
+                visitorPollTimer = setInterval(refreshTotalVisitors, 5000);
             } catch (_) {
-                // stream is optional; initial fetched value is still shown
+                // polling is optional; initial fetched value is still shown
             }
         }
 
@@ -1045,9 +1072,7 @@
             if (!countEl) return;
 
             try {
-                const res = await fetch(`${ABACUS_BASE}/get/${NAMESPACE}/likes`, { cache: 'no-store' });
-                if (!res.ok) throw new Error('likes fetch failed');
-                const data = await res.json();
+                const data = await jsonpRequest(`${ABACUS_BASE}/get/${NAMESPACE}/likes`);
                 const value = Number(data?.value ?? 0);
                 countEl.innerText = String(value);
                 localStorage.setItem('local_likes', String(value));
@@ -1073,9 +1098,7 @@
             likeBtn.textContent = 'Liking...';
 
             try {
-                const res = await fetch(`${ABACUS_BASE}/hit/${NAMESPACE}/likes`, { cache: 'no-store' });
-                if (!res.ok) throw new Error('like increment failed');
-                const data = await res.json();
+                const data = await jsonpRequest(`${ABACUS_BASE}/hit/${NAMESPACE}/likes`);
                 const value = Number(data?.value ?? 0);
                 countEl.innerText = String(value);
                 localStorage.setItem('local_likes', String(value));

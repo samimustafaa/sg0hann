@@ -399,13 +399,6 @@
             gap: 5px;
         }
 
-        .visitors {
-            font-size: 0.75rem;
-            color: var(--muted);
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
         .badges {
             display: flex;
             align-items: center;
@@ -443,18 +436,22 @@
             border-radius: 50%;
             background: #22c55e;
             box-shadow: 0 0 6px #22c55e;
-            animation: blink 1.5s ease-in-out infinite;
+            animation: dotPulse 1.4s ease-in-out infinite;
         }
 
-        @keyframes blink {
+        @keyframes dotPulse {
 
             0%,
             100% {
-                opacity: 1;
+                opacity: 0.45;
+                transform: scale(0.85);
+                box-shadow: 0 0 4px rgba(34, 197, 94, 0.35);
             }
 
             50% {
-                opacity: 0.3;
+                opacity: 1;
+                transform: scale(1.2);
+                box-shadow: 0 0 10px rgba(34, 197, 94, 0.95);
             }
         }
 
@@ -798,10 +795,8 @@
 
             <div class="views">
                 <span class="views-dot"></span>
-                <span id="viewCount">0</span> views
+                <span id="visCount">0</span> views
             </div>
-
-            <div class="visitors"><span id="visCount">0</span> views</div>
 
             <div class="badges">
                 <span class="badge"><span id="likeCount">0</span> likes</span>
@@ -1026,7 +1021,6 @@
 
             function setTotalVisitors(value) {
                 const formatted = Number(value ?? 0).toLocaleString();
-                document.getElementById('viewCount').textContent = formatted;
                 document.getElementById('visCount').textContent = formatted;
             }
 
@@ -1042,7 +1036,6 @@
                     if (cachedTotal) {
                         setTotalVisitors(cachedTotal);
                     } else {
-                        document.getElementById('viewCount').textContent = '0';
                         document.getElementById('visCount').textContent = '0';
                     }
                 }
@@ -1127,7 +1120,6 @@
         if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
             initViews();
         } else {
-            document.getElementById('viewCount').textContent = 'dev';
             document.getElementById('visCount').textContent = 'dev';
         }
         initLikes();

@@ -529,6 +529,11 @@
             box-shadow: 0 0 18px rgba(83, 252, 28, 0.5), 0 0 40px rgba(83, 252, 28, 0.2);
         }
 
+        .link-btn.ig:hover {
+            border-color: rgba(225, 48, 108, 0.8);
+            box-shadow: 0 0 18px rgba(225, 48, 108, 0.5), 0 0 40px rgba(253, 29, 29, 0.2);
+        }
+
         .link-btn.hydro:hover {
             border-color: rgba(91, 155, 213, 0.8);
             box-shadow: 0 0 18px rgba(91, 155, 213, 0.5), 0 0 40px rgba(91, 155, 213, 0.2);
@@ -585,10 +590,53 @@
         .player-track {
             font-size: 0.85rem;
             font-weight: 600;
-            margin-bottom: 14px;
+            margin-bottom: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        .player-artist {
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+
+        .song-switch {
+            display: grid;
+            grid-template-columns: 34px 1fr 34px;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .song-nav {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: #fff;
+            font-size: 1rem;
+            line-height: 1;
+            transition: border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .song-nav:hover {
+            border-color: rgba(91, 155, 213, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .song-picker {
+            width: 100%;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            padding: 0 10px;
+            font-size: 0.75rem;
+            outline: none;
         }
 
         .player-controls {
@@ -826,6 +874,14 @@
                         alt="Kick" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;" />
                     <span style="color:#22c55e;">Kick</span>
                 </a>
+                <!-- Instagram -->
+                <a class="link-btn ig" href="https://www.instagram.com/sg0hann" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" fill="#E1306C" aria-hidden="true">
+                        <path
+                            d="M7.8 2h8.4A5.8 5.8 0 0 1 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8A5.8 5.8 0 0 1 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2zm0 1.8A4 4 0 0 0 3.8 7.8v8.4a4 4 0 0 0 4 4h8.4a4 4 0 0 0 4-4V7.8a4 4 0 0 0-4-4H7.8zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 1.8A3.2 3.2 0 1 0 12 15.2 3.2 3.2 0 0 0 12 8.8zm5.3-2a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3z" />
+                    </svg>
+                    <span style="color:#E1306C;">Instagram</span>
+                </a>
                 <!-- Discord Community -->
                 <a class="link-btn dc" href="https://discord.gg/4TgK88cd3F" target="_blank" rel="noopener">
                     <svg viewBox="0 0 24 24" fill="#5865F2">
@@ -842,9 +898,14 @@
     <div id="music-widget" style="opacity:0;pointer-events:none;transition:opacity 0.6s ease;">
         <div id="music-panel">
             <div class="player-title">Now Playing</div>
-            <div class="player-track">School rooftop</div>
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:-10px;margin-bottom:10px;">Hisohkah</div>
-            <audio id="audioEl" src="Hisohkah - School rooftop (SlowedReverb).mp3" preload="metadata"></audio>
+            <div class="player-track" id="trackTitle">School rooftop</div>
+            <div class="player-artist" id="trackArtist">Hisohkah</div>
+            <div class="song-switch">
+                <button class="song-nav" id="prevSongBtn" type="button" aria-label="Previous song">&#8249;</button>
+                <select class="song-picker" id="songPicker" aria-label="Choose song"></select>
+                <button class="song-nav" id="nextSongBtn" type="button" aria-label="Next song">&#8250;</button>
+            </div>
+            <audio id="audioEl" preload="metadata"></audio>
             <div class="player-controls">
                 <button class="play-btn" id="playBtn" aria-label="Play/Pause">
                     <svg viewBox="0 0 24 24" id="playIcon">
@@ -1133,9 +1194,57 @@
         const currentTimeEl = document.getElementById('currentTime');
         const durationEl = document.getElementById('duration');
         const fab = document.getElementById('music-fab');
+        const trackTitleEl = document.getElementById('trackTitle');
+        const trackArtistEl = document.getElementById('trackArtist');
+        const songPicker = document.getElementById('songPicker');
+        const prevSongBtn = document.getElementById('prevSongBtn');
+        const nextSongBtn = document.getElementById('nextSongBtn');
 
         const PAUSE_PATH = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
         const PLAY_PATH = 'M8 5v14l11-7z';
+
+        const songs = [
+            { title: 'School rooftop', artist: 'Hisohkah', file: 'Hisohkah - School rooftop (SlowedReverb).mp3' },
+            { title: 'TV (Karaoke Version)', artist: 'Billie Eilish', file: 'Billie Eilish - TV (Karaoke Version).mp3' },
+            { title: 'wishing (slowed)', artist: 'goodnight dad i love you', file: 'goodnight dad i love you - wishing (slowed).mp3' }
+        ];
+        let songIndex = 0;
+
+        function updateTrackUI() {
+            const song = songs[songIndex];
+            trackTitleEl.textContent = song.title;
+            trackArtistEl.textContent = song.artist;
+            songPicker.value = String(songIndex);
+        }
+
+        function setSong(index, shouldResumePlayback) {
+            songIndex = (index + songs.length) % songs.length;
+            const song = songs[songIndex];
+            audio.src = song.file;
+            audio.load();
+            progressFill.style.width = '0%';
+            currentTimeEl.textContent = '0:00';
+            durationEl.textContent = '0:00';
+            updateTrackUI();
+
+            if (shouldResumePlayback) {
+                audio.play().then(() => {
+                    playIconEl.querySelector('path').setAttribute('d', PAUSE_PATH);
+                    fab.classList.add('playing');
+                }).catch(() => {
+                    playIconEl.querySelector('path').setAttribute('d', PLAY_PATH);
+                    fab.classList.remove('playing');
+                });
+            }
+        }
+
+        songs.forEach((song, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = `${song.artist} - ${song.title}`;
+            songPicker.appendChild(option);
+        });
+        setSong(0, false);
 
         function fmt(s) { return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`; }
 
@@ -1150,8 +1259,7 @@
         });
 
         audio.addEventListener('ended', () => {
-            playIconEl.querySelector('path').setAttribute('d', PLAY_PATH);
-            fab.classList.remove('playing');
+            setSong(songIndex + 1, true);
         });
 
         playBtn.addEventListener('click', () => {
@@ -1164,6 +1272,18 @@
                 playIconEl.querySelector('path').setAttribute('d', PLAY_PATH);
                 fab.classList.remove('playing');
             }
+        });
+
+        songPicker.addEventListener('change', () => {
+            setSong(Number(songPicker.value), !audio.paused);
+        });
+
+        prevSongBtn.addEventListener('click', () => {
+            setSong(songIndex - 1, !audio.paused);
+        });
+
+        nextSongBtn.addEventListener('click', () => {
+            setSong(songIndex + 1, !audio.paused);
         });
 
         const progressBar = document.getElementById('progressBar');
